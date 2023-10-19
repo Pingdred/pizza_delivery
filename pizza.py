@@ -7,47 +7,28 @@ from cat.log import log
 
 import json
 
+
+from .form import Form
 KEY = "pizza_delivery"
 
-class Question(Enum):
-    CORNER = "Do you prefer hight corner or low corner?"
-    PIZZA_TYPE = "Wich pizza do you prefer?"
-    ADDRESS = "What is your address?"
-    PHONE = "What is your phone number?"
-    COMPLETE = "Pizza ordinata"
+"""
+{
+  "pizza_type": "Margherita",  # must be enum (3 different types)
+  "cheese": True, #boolean
+  "address": "street....", # free string
+  "floor": 4, # int, address floor
+}```
 
-class Corner(Enum):
-    Hight = "Hight"
-    Low = "Low"
+"""
 
-class Form(BaseModel):
-    corner: Corner = None
-    pizza_type: str = None
-    address: str = None
-    phone: str = None
 
-    def check(self):
-        if self.corner is None:
-         return Question.CORNER
-    
-        if self.pizza_type is None:
-            return Question.PIZZA_TYPE
-        
-        if self.address is None:
-            return Question.ADDRESS
-        
-        if self.phone is None:
-            return Question.PHONE
-        
-        return Question.COMPLETE
 
 
 
 @tool(return_direct=True)
 def order_pizza(details, cat):
-    '''Use this tool to order a pizza. Use the information th eyser give you to fullfill the following json as Action Inputs:
+    '''Use this tool to order a pizza. User may provide some or all the information to fullfill the following json as Action Inputs:
     {
-        "corner": null # Can be "Hight" or "Low",
         "pizza_type": null # Can be any type of pizza ,
         "address": null # The address where delivery the pizza,
         "phone": null # The phone number of the customer,
@@ -56,15 +37,16 @@ def order_pizza(details, cat):
     try:
         details = json.loads(details)
         f = Form(**details)
-    except:
+    except Exception as e:
+        log.error("parsing error")
+        print(e)
         f = Form()
 
-    check_result = f.check()
-
-    if check_result != Question.COMPLETE:
+    if f.is_complete():
+        return f.completion_utterance()
+    else:
         cat.working_memory[KEY] = f
-
-    return check_result.value
+        return f.ask_user_utterance(cat)
 
 
 @hook
@@ -77,40 +59,35 @@ def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
     log.critical(f"WORKING MEMORY: {KEY})")
     print(cat.working_memory[KEY])
 
-    details = cat.working_memory[KEY]
+    f = cat.working_memory[KEY]
 
-    check_result = details.check()
+    # extract new info
+    user_message = cat.working_memory["user_message_json"]["text"]
+    prompt = f"""Update the following JSON with information extracted from the Sentence:
 
-    user_mesage = cat.working_memory["user_message_json"]["text"]
+    Sentence:
+    {user_message}
 
-    if check_result == Question.CORNER:
-        details.corner = user_mesage
-        log.critical(details.corner)
-        return {
-            "output": Question.PIZZA_TYPE.value
-        }
+    JSON:
+    {f.model_dump_json()}
 
-    if check_result == Question.PIZZA_TYPE:
-        details.pizza_type = user_mesage
-        return {
-            "output": Question.ADDRESS.value
-        }
-
-    if check_result == Question.ADDRESS:
-        details.address = user_mesage
-        return {
-            "output": Question.PHONE.value
-        }
-
-    if check_result == Question.PHONE:
-        details.phone = user_mesage
-        del cat.working_memory[KEY]
-        return {
-            "output": f"{details.dict()}"
-        }
+    Updated JSON:
+"""
+    json_str = cat.llm(prompt, stream=True)
+    details = json.loads(json_str)
     
+    # update form
+    new_details = f.model_dump() | details
+    f = f.model_construct(**new_details)
+    cat.working_memory[KEY] = f
+    
+    if f.is_complete():
+        #f.submit()
+        utter = f.completion_utterance()
+        del cat.working_memory[KEY]
+    else:
+        utter = f.ask_user_utterance(cat)
+    return {
+        "output": utter
+    }
 
-    log.critical("DETAILS")
-    print(details.dict())
-
-    cat.working_memory[KEY] = details
