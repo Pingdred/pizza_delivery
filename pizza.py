@@ -22,12 +22,51 @@ KEY = "pizza_delivery"
 """
 
 
+EDIT_HISTORY = []
 
+def format_edit_hystory(tunrs):
+    formatted_history = ""
+    for i, elem in enumerate(EDIT_HISTORY):
+        if i > tunrs:
+            return formatted_history
+        
+        formatted_history += elem
+    
+    return formatted_history
 
+def extract_info(cat, model):
+
+    edit_history = format_edit_hystory(3)
+
+    user_message = cat.working_memory["user_message_json"]["text"]
+    prompt = f"""Update the following JSON with information extracted from the Sentence:
+
+    {edit_history}
+    Sentence: {user_message}
+
+    JSON: {model.model_dump_json()}
+
+    Updated JSON:"""
+    
+    print(prompt)
+
+    json_str = cat.llm(prompt)
+
+    EDIT_HISTORY.append(
+    f"""Sentence: {user_message}
+
+    JSON: {model.model_dump_json()}
+
+    Updated JSON: {json_str}
+    
+"""
+    )
+
+    return json.loads(json_str)
 
 @tool(return_direct=True)
 def order_pizza(details, cat):
-    '''Use this tool to order a pizza. User may provide some or all the information to fullfill the following json as Action Inputs:
+    '''Use this tool to order one or more pizzas. User may provide some or all the information to fullfill the following json as Action Inputs:
     {
         "pizza_type": null # Can be any type of pizza ,
         "address": null # The address where delivery the pizza,
@@ -43,17 +82,7 @@ def order_pizza(details, cat):
     f = Form()
 
     # extract new info
-    user_message = cat.working_memory["user_message_json"]["text"]
-    prompt = f"""Update the following JSON with information extracted from the Sentence:
-
-    Sentence: {user_message}
-
-    JSON: {f.model_dump_json()}
-
-    Updated JSON:
-"""
-    json_str = cat.llm(prompt)
-    details = json.loads(json_str)
+    details = extract_info(cat, f)
     
     # update form
     new_details = f.model_dump() | details
@@ -80,17 +109,7 @@ def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
     f = cat.working_memory[KEY]
 
     # extract new info
-    user_message = cat.working_memory["user_message_json"]["text"]
-    prompt = f"""Update the following JSON with information extracted from the Sentence:
-
-    Sentence: {user_message}
-
-    JSON: {f.model_dump_json()}
-
-    Updated JSON:
-"""
-    json_str = cat.llm(prompt, stream=True)
-    details = json.loads(json_str)
+    details = extract_info(cat, f)
     
     # update form
     new_details = f.model_dump() | details
