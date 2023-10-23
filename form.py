@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from enum import Enum
-from typing import Dict
+from typing import Dict, List
 
 from cat.log import log
 
@@ -44,8 +44,11 @@ I'm also sending a couple of additional pizza to Nicola and Daniele as a consola
 
         user_message = cat.working_memory["user_message_json"]["text"]
 
-        prompt = f"""Create a question for the user, to recap and fill up the null/None fields in the following JSON:
+        prefix = cat.mad_hatter.execute_hook("agent_prompt_prefix",'')
 
+        prompt = f"""{prefix}
+        
+Create a question for the user, to recap and fill up the null/None fields in the following JSON:
 
 {{
     "pizza_type": "Margherita",
@@ -67,6 +70,7 @@ Question: Margherità! Greate choice, what address can I deliver it to?
 {self.model_dump_json(indent=4)}
 User: {user_message}
 Question: """
+
         log.warning("--------")
         print(prompt)
         question = cat.llm(prompt)
