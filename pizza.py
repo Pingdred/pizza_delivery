@@ -8,7 +8,7 @@ from cat.log import log
 import json
 
 
-from .form import Form
+from cat.plugins.pizza_delivery.form import Form
 KEY = "pizza_delivery"
 
 """
@@ -34,13 +34,31 @@ def order_pizza(details, cat):
         "phone": null # The phone number of the customer,
     }'''
 
-    try:
-        details = json.loads(details)
-        f = Form(**details)
-    except Exception as e:
-        log.error("parsing error")
-        print(e)
-        f = Form()
+# try:
+#     details = json.loads(details)
+#     f = Form(**details)
+# except Exception as e:
+    # log.error("parsing error")
+    # print(e)
+    f = Form()
+
+    # extract new info
+    user_message = cat.working_memory["user_message_json"]["text"]
+    prompt = f"""Update the following JSON with information extracted from the Sentence:
+
+    Sentence: {user_message}
+
+    JSON: {f.model_dump_json()}
+
+    Updated JSON:
+"""
+    json_str = cat.llm(prompt)
+    details = json.loads(json_str)
+    
+    # update form
+    new_details = f.model_dump() | details
+    f = f.model_construct(**new_details)
+    cat.working_memory[KEY] = f
 
     if f.is_complete():
         return f.completion_utterance()
@@ -65,11 +83,9 @@ def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
     user_message = cat.working_memory["user_message_json"]["text"]
     prompt = f"""Update the following JSON with information extracted from the Sentence:
 
-    Sentence:
-    {user_message}
+    Sentence: {user_message}
 
-    JSON:
-    {f.model_dump_json()}
+    JSON: {f.model_dump_json()}
 
     Updated JSON:
 """
