@@ -42,14 +42,34 @@ I'm also sending a couple of additional pizza to Nicola and Daniele as a consola
 
         #missing_fields = { k:v for k, v in self.model_dump().items() if v is None}
 
+        user_message = cat.working_memory["user_message_json"]["text"]
+
         prompt = f"""Create a question for the user, to recap and fill up the null/None fields in the following JSON:
 
-{self.model_dump_json(indent=4)}
 
+{{
+    "pizza_type": "Margherita",
+    "address": "Via Roma 1",
+    "phone": null
+}}
+User: Sure, I live in Via Roma 1
+Question: A margherita pizza in Via Roma 1, I need a phone number to contact you, can you provide me with one?
+        
+{{
+    "pizza_type": "Margherita",
+    "address": null,
+    "phone": null
+}}
+User: I've changed my mind, maybe a margherita pizza is better
+Question: Margherità! Greate choice, what address can I deliver it to?
+
+
+{self.model_dump_json(indent=4)}
+User: {user_message}
 Question: """
         log.warning("--------")
         print(prompt)
-        question = cat.llm(prompt, stream=True)
+        question = cat.llm(prompt)
         return question 
 
 
