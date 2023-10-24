@@ -1,28 +1,18 @@
-from pydantic import BaseModel, ConfigDict
-from enum import Enum
-from typing import Dict, List
+import json
 
 from cat.log import log
 
-# class Question(Enum):
-#     CORNER = "Do you prefer hight corner or low corner?"
-#     PIZZA_TYPE = "Wich pizza do you prefer?"
-#     ADDRESS = "What is your address?"
-#     PHONE = "What is your phone number?"
-#     COMPLETE = "Pizza ordinata"
+from pydantic import ValidationError
 
-# class Corner(Enum):
-#     Hight = "Hight"
-#     Low = "Low"
-
-class Form(BaseModel):
-    #corner: Corner = None
-    pizza_type: str | None = None
-    address: str | None = None
-    phone: str | None = None
+class Form:
     
+    def __init__(self, model, cat):
+        self.model = model
+        self.cat = cat
+
+
     def is_complete(self):
-        for k,v in self.model_dump().items():
+        for k,v in self.model.model_dump().items():
             if v is None:
                 return False
         return True
@@ -32,19 +22,17 @@ class Form(BaseModel):
         return f"""Pizza order COMPLETE:
 
 ```json
-{self.model_dump_json()}
+{self.model.model_dump_json()}
 ```
-
-I'm also sending a couple of additional pizza to Nicola and Daniele as a consolation prize :')
 """
 
-    def ask_user_utterance(self, cat):
+    def ask_missing_information(self):
 
         #missing_fields = { k:v for k, v in self.model_dump().items() if v is None}
 
-        user_message = cat.working_memory["user_message_json"]["text"]
+        user_message = self.cat.working_memory["user_message_json"]["text"]
 
-        prefix = cat.mad_hatter.execute_hook("agent_prompt_prefix",'')
+        prefix = self.cat.mad_hatter.execute_hook("agent_prompt_prefix",'')
 
         prompt = f"""{prefix}
         
@@ -67,15 +55,55 @@ User: I've changed my mind, maybe a margherita pizza is better
 Question: Margherità! Greate choice, what address can I deliver it to?
 
 
-{self.model_dump_json(indent=4)}
+{self.model.model_dump_json(indent=4)}
 User: {user_message}
 Question: """
 
         log.warning("--------")
         print(prompt)
-        question = cat.llm(prompt)
+        question = self.cat.llm(prompt)
         return question 
 
+    def update(self):
+
+        # extract new info
+        details = self._extract_info()
+
+        # update form
+        new_details = self.model.model_dump() | details
+
+        if new_details == self.model.model_dump():
+            return False
+
+        self.model = self.model.model_construct(**new_details)
+        return True
+
+    def _extract_info(self):
+
+        user_message = self.cat.working_memory["user_message_json"]["text"]
+        prompt = f"""Update the following JSON with information extracted from the Sentence:
+
+        Sentence: Sure, i want a pizza margherita
+        JSON: {{
+            "pizza_type": null,
+            "address": "Via Roma 1",
+            "phone": null
+        }}
+        Updated JSON:{{
+            "pizza_type": "Margherita",
+            "address": "Via Roma 1",
+            "phone": null
+        }}
+        
+        Sentence: {user_message}
+        JSON: {self.model.model_dump_json(indent=4)}
+        Updated JSON: """
+        
+        print(prompt)
+
+        json_str = self.cat.llm(prompt)
+
+        return json.loads(json_str)
 
     #def search_memory():
     #def submit():
