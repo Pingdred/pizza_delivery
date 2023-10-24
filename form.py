@@ -10,7 +10,6 @@ class Form:
         self.model = model
         self.cat = cat
 
-
     def is_complete(self):
         for k,v in self.model.model_dump().items():
             if v is None:
@@ -74,6 +73,12 @@ Question: """
 
         if new_details == self.model.model_dump():
             return False
+
+        try:
+            self.model.model_validate(new_details)
+        except ValidationError as e:
+            for error_message in e.errors():
+                return error_message["msg"]
 
         self.model = self.model.model_construct(**new_details)
         return True

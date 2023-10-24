@@ -40,7 +40,13 @@ def order_pizza(details, cat):
     f = Form(model=PizzaOrder(), cat=cat)
     
     # update form
-    f.update()
+    res = f.update()
+
+    log.critical(res)
+
+    if isinstance(res, str):
+        log.critical("VALIDATION ERROR")
+        return res
 
     if f.is_complete():
         return f.completion_utterance()
@@ -61,8 +67,12 @@ def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
 
     f = cat.working_memory[KEY]
 
-    # update form
-    if not f.update():
+    res = f.update()
+    if isinstance(res, str):
+        return {
+            "output": res
+        }
+    elif res is False:
         return
 
     if f.is_complete():
