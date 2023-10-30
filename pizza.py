@@ -1,11 +1,22 @@
 from cat.mad_hatter.decorators import hook, tool
-from pydantic import BaseModel, field_validator, ValidationError
+from pydantic import BaseModel, field_validator
 from typing import Dict
 
 from cat.log import log
 
 from cat.plugins.pizza_delivery.form import Form
 KEY = "pizza_delivery"
+
+menu = [
+            "Margherita",
+            "Marinara",
+            "Boscaiola",
+            "Napoletana",
+            "Capricciosa",
+            "Diavola",
+            "Ortolana"
+        ]
+
 
 
 class PizzaOrder(BaseModel):
@@ -18,24 +29,18 @@ class PizzaOrder(BaseModel):
     def validate_pizza_type(cls, pizza_type: str):
         log.critical("VALIDATIONS")
 
-        available_pizzas = [
-            "Margherita",
-            "Marinara",
-            "Boscaiola",
-            "Napoletana",
-            "Capricciosa",
-            "Diavola",
-            "Ortolana"
-        ]
+        if pizza_type is None:
+            return
 
-        if pizza_type not in available_pizzas:
+        if pizza_type not in menu:
             raise ValueError(f"{pizza_type} is not present in the menù")
 
 
 
 @tool(return_direct=True)
 def order_pizza(details, cat):
-    '''Use this tool to order one pizza'''
+    '''I would like to order a pizza
+I'll take a Margherita pizza'''
 
     f = Form(model=PizzaOrder(), cat=cat)
     
@@ -55,6 +60,17 @@ def order_pizza(details, cat):
         return f.ask_missing_information()
 
 
+@tool()
+def pizza_menu(input, cat):
+    '''What is on the menu?
+Which types of pizza do you have?'''
+
+    responce = "The available pizzas are the following:"
+    for pizza in menu:
+        responce += f"\n - {pizza}"
+
+    return responce
+
 @hook
 def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
 
@@ -72,6 +88,7 @@ def agent_fast_reply(fast_reply: Dict, cat) -> Dict:
         return {
             "output": res
         }
+    # There is no information in the new message that can update the form
     elif res is False:
         return
 
